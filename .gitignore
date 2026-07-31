@@ -1,0 +1,31 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries, coverage, profiles
+*.test
+*.out
+coverage.*
+cpu.prof
+mem.prof
+
+# Go workspace files — local dev only
+go.work
+go.work.sum
+
+# Agent tooling local overrides
+.claude/settings.local.json
+
+# Local Claude Code config template — personal/global scaffolding, not part of binkit.
+# Installed into .claude/ and ~/.claude.json rather than published here.
+claude/
+
+# Editors / OS
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
