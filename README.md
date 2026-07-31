@@ -55,9 +55,23 @@ explicit `Update` call changes the pin.
 
 ## Update checks
 
-Once every seven days, binkit checks whether a newer release exists and prints a one-line
-notice — to **stderr**, and only when stderr is a TTY, so it never pollutes piped output or
-CI logs. It never updates anything on its own. Set `BINKIT_NO_UPDATE_CHECK=1` to disable.
+Once every seven days, binkit checks whether a newer release exists and reports it — to
+**stderr**, and only when stderr is a terminal, so it never pollutes piped output or CI
+logs. When there is nowhere to show a notice the check is skipped entirely rather than
+performed and discarded.
+
+```
+binkit: typst 0.15.1 is pinned; 0.16.0 is available.
+        run: massprep --update-tools typst
+```
+
+The second line appears only if you set `Resolver.UpdateHint` — binkit cannot know your
+CLI's flags.
+
+A failed check backs off for an hour rather than consuming the seven-day window, so being
+offline for a week neither retries on every invocation nor silences the next real check.
+Nothing here can fail a build, and nothing is ever updated automatically. Set
+`BINKIT_NO_UPDATE_CHECK=1`, or `Resolver.NoCheck`, to disable.
 
 ## Escape hatch
 

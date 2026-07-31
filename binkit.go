@@ -35,6 +35,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Environment variables binkit consults.
@@ -169,6 +170,27 @@ type Resolver struct {
 	// [DefaultPlatforms].
 	Platforms []Platform
 
+	// Now returns the current time. Defaults to [time.Now].
+	Now func() time.Time
+
+	// Stderr receives update notices. Defaults to [os.Stderr]. Notices never go to
+	// stdout, and are suppressed entirely when the default stderr is not a terminal —
+	// a CI log has no one to read them.
+	Stderr io.Writer
+
+	// CheckEvery is the minimum interval between upstream update checks. Defaults to
+	// [DefaultCheckEvery].
+	CheckEvery time.Duration
+
+	// NoCheck disables update checks. The BINKIT_NO_UPDATE_CHECK environment variable
+	// does the same for an end user.
+	NoCheck bool
+
+	// UpdateHint returns the command that updates the named tool, shown as a second
+	// line of the update notice. binkit cannot know a consuming CLI's flags, so
+	// without this the notice reports versions only.
+	UpdateHint func(toolName string) string
+
 	// Test seams: the GitHub hosts to talk to. Empty means the real ones.
 	apiBase      string
 	downloadBase string
@@ -251,7 +273,16 @@ func (r *Resolver) Ensure(ctx context.Context, t Tool) (string, error) {
 		return "", fmt.Errorf("%w: %s (looked in %s)", ErrNotPinned, t.Name, lockPath)
 	}
 
-	return r.install(ctx, t, entry)
+	path, err := r.install(ctx, t, entry)
+	if err != nil {
+		return "", err
+	}
+
+	// Advisory only: this never changes what was installed, and any problem inside it
+	// is swallowed rather than allowed to fail a build.
+	r.checkForUpdate(ctx, t, entry)
+
+	return path, nil
 }
 
 // Update resolves a version — the latest release when version is empty — installs it,

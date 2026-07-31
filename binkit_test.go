@@ -162,6 +162,10 @@ type fakeGitHub struct {
 
 	apiHits atomic.Int64
 	dlHits  atomic.Int64
+
+	// failAPI makes the release endpoints return 500, so tests can exercise the
+	// update check's failure and backoff paths without a real network outage.
+	failAPI atomic.Bool
 }
 
 func newFakeGitHub(t *testing.T, tag string, assets map[string][]byte, withDigests bool) *fakeGitHub {
@@ -191,6 +195,10 @@ func newFakeGitHub(t *testing.T, tag string, assets map[string][]byte, withDiges
 func (f *fakeGitHub) serveRelease(w http.ResponseWriter, r *http.Request) {
 	f.apiHits.Add(1)
 
+	if f.failAPI.Load() {
+		http.Error(w, `{"message":"Server Error"}`, http.StatusInternalServerError)
+		return
+	}
 	if tag := r.PathValue("tag"); tag != "" && tag != f.tag {
 		http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
 		return
