@@ -709,3 +709,21 @@ func TestLockRoundTrip(t *testing.T) {
 		t.Error("lock file does not end in a newline")
 	}
 }
+
+// TestLockFileIsReadable guards against inheriting os.CreateTemp's 0600 mode through
+// the staging rename. The lock file is committed and read by anyone who can read the
+// repository, so a private mode is wrong even though git would not record it.
+func TestLockFileIsReadable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tools.json")
+	if err := writeLock(path, LockFile{"widget": {Version: "1.0.0", Repo: "acme/widget"}}); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat lock: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Errorf("lock file mode = %04o, want 0644", got)
+	}
+}
