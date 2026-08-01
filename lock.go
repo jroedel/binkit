@@ -72,6 +72,14 @@ func writeLock(path string, lock LockFile) error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close staged lock file: %w", err)
 	}
+
+	// os.CreateTemp makes the file 0600, and the rename below would preserve that. A
+	// lock file is committed and read by whoever can read the repository, so widen it
+	// explicitly rather than inheriting the temp file's private mode.
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		return fmt.Errorf("set lock file permissions: %w", err)
+	}
+
 	if err := os.Rename(tmpName, path); err != nil {
 		return fmt.Errorf("install lock file %s: %w", path, err)
 	}

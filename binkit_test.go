@@ -162,6 +162,10 @@ type fakeGitHub struct {
 
 	apiHits atomic.Int64
 	dlHits  atomic.Int64
+
+	// failAPI makes the release endpoints return 500, so tests can exercise the
+	// update check's failure and backoff paths without a real network outage.
+	failAPI atomic.Bool
 }
 
 func newFakeGitHub(t *testing.T, tag string, assets map[string][]byte, withDigests bool) *fakeGitHub {
@@ -191,6 +195,10 @@ func newFakeGitHub(t *testing.T, tag string, assets map[string][]byte, withDiges
 func (f *fakeGitHub) serveRelease(w http.ResponseWriter, r *http.Request) {
 	f.apiHits.Add(1)
 
+	if f.failAPI.Load() {
+		http.Error(w, `{"message":"Server Error"}`, http.StatusInternalServerError)
+		return
+	}
 	if tag := r.PathValue("tag"); tag != "" && tag != f.tag {
 		http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
 		return
@@ -699,5 +707,23 @@ func TestLockRoundTrip(t *testing.T) {
 	}
 	if !bytes.HasSuffix(raw, []byte("\n")) {
 		t.Error("lock file does not end in a newline")
+	}
+}
+
+// TestLockFileIsReadable guards against inheriting os.CreateTemp's 0600 mode through
+// the staging rename. The lock file is committed and read by anyone who can read the
+// repository, so a private mode is wrong even though git would not record it.
+func TestLockFileIsReadable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tools.json")
+	if err := writeLock(path, LockFile{"widget": {Version: "1.0.0", Repo: "acme/widget"}}); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat lock: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Errorf("lock file mode = %04o, want 0644", got)
 	}
 }
