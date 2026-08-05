@@ -6,6 +6,14 @@ Some tools you depend on aren't written in Go, so `go tool` can't manage them. b
 them from GitHub releases, verifies them against a pinned SHA-256, caches them per version,
 and hands your program back a path.
 
+Pin once, from the command line, and commit the result:
+
+```sh
+binkit pin typst        # writes tools.json — commit it
+```
+
+Then resolve it from your program:
+
 ```go
 path, err := resolver.Ensure(ctx, catalog.Typst())
 if err != nil {
@@ -13,6 +21,28 @@ if err != nil {
 }
 cmd := exec.CommandContext(ctx, path, "compile", "in.typ", "out.pdf")
 ```
+
+Adding binkit to a Go application? **[INTEGRATION.md](INTEGRATION.md)** is the step-by-step
+guide.
+
+## CLI
+
+```
+binkit pin <tool>[@version]   resolve, install, and record the pin
+binkit ensure <tool>          install if needed, print the path
+binkit path <tool>            print an installed tool's path; never uses the network
+binkit list                   list the pins in the lock file
+```
+
+Stdout carries only paths and the pin table, so command substitution is safe:
+
+```sh
+TYPST=$(binkit ensure typst) && "$TYPST" compile in.typ out.pdf
+```
+
+Install it with `go install github.com/jroedel/binkit/cmd/binkit@latest`, or manage it as a
+tool dependency with `go get -tool` — binkit is a Go program, so `go tool` handles it,
+which is exactly what it cannot do for Typst.
 
 ## The one-dependency promise
 

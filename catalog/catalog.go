@@ -12,9 +12,37 @@ package catalog
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/jroedel/binkit"
 )
+
+// registry maps a tool name to its constructor. Holding constructors rather than
+// [binkit.Tool] values is what keeps [Lookup] callers from sharing mutable state.
+var registry = map[string]func() binkit.Tool{
+	"typst": Typst,
+}
+
+// Lookup returns the catalogued definition for name.
+//
+// It exists so a caller can go from a string — a command-line argument, a config file
+// entry — to a Tool without a switch statement that has to be updated here and there.
+// A tool the catalog lacks is not an error condition to route around: declare a
+// [binkit.Tool] literal instead and pass it to the same [binkit.Resolver] methods.
+func Lookup(name string) (binkit.Tool, bool) {
+	newTool, ok := registry[name]
+	if !ok {
+		return binkit.Tool{}, false
+	}
+	return newTool(), true
+}
+
+// Names returns every catalogued tool name, sorted, so a CLI can list what it knows
+// about and report a useful error for what it does not.
+func Names() []string {
+	return slices.Sorted(maps.Keys(registry))
+}
 
 // typstTargets maps GOOS/GOARCH to the Rust target triple Typst names its release
 // assets after. Platforms absent from this map have no published Typst build.

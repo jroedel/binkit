@@ -11,6 +11,19 @@ there breaks builds. Any change to it will appear here under its own heading.
 
 ### Added
 
+- `cmd/binkit`, a CLI with `pin`, `ensure`, `path`, and `list`. Until now a project could
+  not create a `tools.json` without writing Go code that called `Resolver.Update`, which
+  left the library unable to perform its own first step. Stdout carries only paths and the
+  pin table so command substitution is safe; usage errors exit 2 and provisioning failures
+  exit 1.
+- `Resolver.CachedPath` returns the path of an already-installed tool without downloading,
+  verifying, or touching the network, and reports the new `ErrNotCached` when the tool is
+  pinned but absent. `Ensure` cannot answer that question, because it installs.
+- `catalog.Lookup` and `catalog.Names` turn a string into a `Tool`, so a command-line
+  argument does not require a hand-maintained switch statement.
+- [INTEGRATION.md](INTEGRATION.md), a guide for adding binkit to an existing Go
+  application.
+
 - `Resolver.Pins` reports the pinned version, repo, and digests for every tool in the lock
   file. `LockFile` and `LockEntry` were exported but unreachable: no exported function
   produced or consumed them, so a caller wanting the resolved version had to re-parse

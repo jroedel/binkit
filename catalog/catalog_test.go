@@ -3,6 +3,7 @@ package catalog_test
 import (
 	"errors"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 
@@ -23,6 +24,52 @@ var wantTypstAssets = map[binkit.Platform]string{
 	{OS: "darwin", Arch: "arm64"}:  "typst-aarch64-apple-darwin.tar.xz",
 	{OS: "windows", Arch: "amd64"}: "typst-x86_64-pc-windows-msvc.zip",
 	{OS: "windows", Arch: "arm64"}: "typst-aarch64-pc-windows-msvc.zip",
+}
+
+func TestLookupResolvesEveryCataloguedName(t *testing.T) {
+	names := catalog.Names()
+	if len(names) == 0 {
+		t.Fatal("the catalog is empty")
+	}
+
+	for _, name := range names {
+		tool, ok := catalog.Lookup(name)
+		if !ok {
+			t.Errorf("Names reported %q but Lookup does not resolve it", name)
+			continue
+		}
+		if tool.Name != name {
+			t.Errorf("catalog.Lookup(%q) returned a tool named %q", name, tool.Name)
+		}
+	}
+}
+
+func TestLookupUnknownToolIsNotAnError(t *testing.T) {
+	if _, ok := catalog.Lookup("nosuchtool"); ok {
+		t.Error("Lookup reported success for a tool the catalog does not have")
+	}
+}
+
+// TestLookupReturnsIndependentValues mirrors the guarantee the constructors give: one
+// caller must not be able to mutate what another caller receives.
+func TestLookupReturnsIndependentValues(t *testing.T) {
+	first, ok := catalog.Lookup("typst")
+	if !ok {
+		t.Fatal("typst is not in the catalog")
+	}
+	second, _ := catalog.Lookup("typst")
+
+	first.Repo = "someone/else"
+	if second.Repo == first.Repo {
+		t.Error("Lookup handed two callers the same mutable definition")
+	}
+}
+
+func TestNamesIsSorted(t *testing.T) {
+	names := catalog.Names()
+	if !slices.IsSorted(names) {
+		t.Errorf("catalog.Names() = %v, want sorted order for stable CLI output", names)
+	}
 }
 
 func TestTypstAssetNames(t *testing.T) {
