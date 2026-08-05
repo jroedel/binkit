@@ -7,7 +7,7 @@ them from GitHub releases, verifies them against a pinned SHA-256, caches them p
 and hands your program back a path.
 
 ```go
-path, err := resolver.Ensure(ctx, catalog.Typst)
+path, err := resolver.Ensure(ctx, catalog.Typst())
 if err != nil {
     return err
 }
@@ -49,9 +49,10 @@ instead of a file-locking library.
 Digests are captured for every platform at pin time, so a colleague on macOS gets a verified
 install from a lockfile generated on Linux.
 
-`Ensure` never resolves "latest" and never silently reaches the network — a pinned version
-downloads by direct URL, which also means no GitHub API rate limit and no token. Only an
-explicit `Update` call changes the pin.
+`Ensure` never resolves "latest": a pinned version downloads by direct URL, so provisioning
+makes no GitHub API call, needs no token, and cannot hit the API rate limit. The one API
+request `Ensure` can make is the advisory update check below, which changes nothing and is
+disableable. Only an explicit `Update` call changes the pin.
 
 ## Update checks
 

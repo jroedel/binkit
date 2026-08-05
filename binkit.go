@@ -9,9 +9,18 @@
 // # Pinning
 //
 // Pins live in a lock file — tools.json by convention — which belongs in the consuming
-// project's repository. [Resolver.Ensure] reads the pin and never resolves "latest",
-// never calls the GitHub API, and therefore never depends on API rate limits or a token.
-// Only [Resolver.Update] changes a pin.
+// project's repository. [Resolver.Ensure] reads the pin, never resolves "latest", and
+// fetches the pinned asset by direct download URL. Provisioning therefore makes no
+// GitHub API call, needs no token, and is not subject to the API rate limit. Only
+// [Resolver.Update] changes a pin.
+//
+// # Update checks
+//
+// After a tool is in place, Ensure may report that a newer release exists. That check is
+// the one part of Ensure that queries the GitHub API. It runs at most once per
+// [Resolver.CheckEvery], only when a notice could actually be displayed, never changes
+// what is installed, and never returns an error. [Resolver.NoCheck] and [EnvNoUpdateCheck]
+// disable it.
 //
 // # Design
 //
@@ -249,10 +258,18 @@ func currentPlatform() Platform {
 // Ensure returns the path to the pinned version of t, downloading and verifying it if
 // it is not already cached.
 //
-// It never reaches the network when the tool is already cached, and never contacts the
-// GitHub API at all — a pinned version downloads by direct URL. A tool with no pin is
-// an error rather than an implicit "fetch latest": changing what a build runs should be
-// a deliberate, reviewable act.
+// Provisioning downloads by direct URL and makes no GitHub API call, so it needs no
+// token and is not subject to the API rate limit. A tool already in the cache is not
+// downloaded again.
+//
+// Ensure may still make one API request after the tool is in place: the advisory update
+// check, which runs at most once per [Resolver.CheckEvery], only when a notice could
+// actually be displayed, and never changes what was installed or fails the call. Set
+// [Resolver.NoCheck] or [EnvNoUpdateCheck] to suppress it, in which case Ensure touches
+// the network only to download an uncached tool.
+//
+// A tool with no pin is an error rather than an implicit "fetch latest": changing what a
+// build runs should be a deliberate, reviewable act.
 func (r *Resolver) Ensure(ctx context.Context, t Tool) (string, error) {
 	if err := t.validate(); err != nil {
 		return "", err

@@ -32,9 +32,11 @@ type ghRelease struct {
 
 // fetchRelease reads release metadata. An empty tag means "latest".
 //
-// This is the only function in binkit that touches the GitHub API. Ensure never calls
-// it for a pinned tool — it builds the download URL directly — so ordinary builds are
-// immune to the 60 requests/hour unauthenticated rate limit and need no token.
+// This is the only function in binkit that touches the GitHub API. Provisioning a pinned
+// tool does not go through it — Ensure builds the download URL directly — so downloads
+// need no token and are immune to the 60 requests/hour unauthenticated rate limit.
+// Update always calls it; Ensure reaches it only via the advisory update check, at most
+// once per check interval per tool, where a rate-limit failure costs nothing but a notice.
 func (r *Resolver) fetchRelease(ctx context.Context, repo, tag string) (ghRelease, error) {
 	url := r.apiBaseURL() + "/repos/" + repo + "/releases/latest"
 	if tag != "" {
