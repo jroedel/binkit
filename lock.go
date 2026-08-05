@@ -21,8 +21,23 @@ type LockEntry struct {
 }
 
 // LockFile maps tool name to pin. It belongs in the consuming project's repository and
-// is meant to be committed — it is what makes a build reproducible.
+// is meant to be committed — it is what makes a build reproducible. [Resolver.Pins]
+// reads one.
 type LockFile map[string]LockEntry
+
+// Pins returns every tool pinned in the lock file, keyed by tool name.
+//
+// This is how a caller learns which version [Resolver.Ensure] will resolve, and with
+// what digest: Ensure itself returns only a path. Pins reads a local file — it never
+// contacts the network and never installs anything.
+//
+// A missing lock file yields an empty [LockFile] rather than an error, matching Ensure,
+// which reports an unpinned tool as [ErrNotPinned] rather than as an I/O failure. The
+// returned map is freshly allocated, so mutating it is safe and affects nothing;
+// [Resolver.Update] is the only thing that writes a pin.
+func (r *Resolver) Pins() (LockFile, error) {
+	return readLock(r.lockPath())
+}
 
 // readLock loads the lock file. A missing file is not an error: it yields an empty
 // LockFile, so a project that has never pinned anything gets a clear "not pinned"

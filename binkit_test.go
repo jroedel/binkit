@@ -30,6 +30,25 @@ import (
 
 const testVersion = "1.4.2"
 
+// requireExecutable asserts the Unix executable bit.
+//
+// Windows has no such bit: Go reports 0666 for any writable file there, and what makes
+// a binary runnable is the .exe suffix binName appends, which the callers already check
+// by opening the path they were handed. Asserting mode there tests the OS, not binkit.
+func requireExecutable(t *testing.T, path string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %s: %v", path, err)
+	}
+	if info.Mode().Perm()&0o111 == 0 {
+		t.Errorf("%s is not executable: mode %v", path, info.Mode().Perm())
+	}
+}
+
 // widgetTool is a synthetic tool shaped like a real one: per-platform asset names, a
 // target-named directory inside the archive, zip on Windows and tar.xz elsewhere, and
 // one platform it is simply not published for.
@@ -354,13 +373,7 @@ func TestEnsureInstallsVerifiesAndCaches(t *testing.T) {
 		t.Errorf("installed content = %q, want %q", content, want)
 	}
 
-	info, err := os.Stat(binPath)
-	if err != nil {
-		t.Fatalf("stat installed binary: %v", err)
-	}
-	if info.Mode().Perm()&0o111 == 0 {
-		t.Errorf("installed binary is not executable: mode %v", info.Mode().Perm())
-	}
+	requireExecutable(t, binPath)
 
 	// The staged archive must not survive into the cache.
 	entries, err := os.ReadDir(filepath.Dir(binPath))
@@ -714,6 +727,12 @@ func TestLockRoundTrip(t *testing.T) {
 // the staging rename. The lock file is committed and read by anyone who can read the
 // repository, so a private mode is wrong even though git would not record it.
 func TestLockFileIsReadable(t *testing.T) {
+	// Windows has no Unix permission bits: Go reports 0666 for any writable file, and
+	// the 0600 mode this guards against cannot arise there in the first place.
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix permission bits on Windows")
+	}
+
 	path := filepath.Join(t.TempDir(), "tools.json")
 	if err := writeLock(path, LockFile{"widget": {Version: "1.0.0", Repo: "acme/widget"}}); err != nil {
 		t.Fatalf("write lock: %v", err)
@@ -725,5 +744,73 @@ func TestLockFileIsReadable(t *testing.T) {
 	}
 	if got := info.Mode().Perm(); got != 0o644 {
 		t.Errorf("lock file mode = %04o, want 0644", got)
+	}
+}
+
+// TestPinsReportsWhatEnsureWouldResolve covers the gap Pins exists to close: Ensure
+// returns a path and nothing else, so without this a caller cannot learn the pinned
+// version without re-parsing tools.json themselves.
+func TestPinsReportsWhatEnsureWouldResolve(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tools.json")
+	r := &Resolver{Lock: path}
+
+	empty, err := r.Pins()
+	if err != nil {
+		t.Fatalf("Pins with no lock file: %v", err)
+	}
+	if len(empty) != 0 {
+		t.Errorf("missing lock reported %d pins, want 0", len(empty))
+	}
+
+	want := LockEntry{
+		Version: testVersion,
+		Repo:    "acme/widget",
+		Digests: map[string]string{"linux/amd64": "sha256:aa"},
+	}
+	if err := writeLock(path, LockFile{"widget": want}); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+
+	pins, err := r.Pins()
+	if err != nil {
+		t.Fatalf("Pins: %v", err)
+	}
+	got, ok := pins["widget"]
+	if !ok {
+		t.Fatalf("Pins did not report widget; got %+v", pins)
+	}
+	if got.Version != want.Version || got.Repo != want.Repo {
+		t.Errorf("pin = %+v, want %+v", got, want)
+	}
+	if got.Digests["linux/amd64"] != want.Digests["linux/amd64"] {
+		t.Errorf("digest = %q, want %q", got.Digests["linux/amd64"], want.Digests["linux/amd64"])
+	}
+
+	// The caller gets its own map: scribbling on it must not corrupt a later read.
+	delete(pins, "widget")
+	again, err := r.Pins()
+	if err != nil {
+		t.Fatalf("Pins after mutation: %v", err)
+	}
+	if _, ok := again["widget"]; !ok {
+		t.Error("mutating the returned map changed what a later Pins call reported")
+	}
+}
+
+// TestPinsDefaultsToToolsJSON pins the documented zero-value behaviour: the same
+// "tools.json in the working directory" default that Ensure uses.
+func TestPinsDefaultsToToolsJSON(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	if err := writeLock("tools.json", LockFile{"widget": {Version: "9.9.9", Repo: "acme/widget"}}); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+
+	pins, err := (&Resolver{}).Pins()
+	if err != nil {
+		t.Fatalf("Pins: %v", err)
+	}
+	if got := pins["widget"].Version; got != "9.9.9" {
+		t.Errorf("version = %q, want %q", got, "9.9.9")
 	}
 }

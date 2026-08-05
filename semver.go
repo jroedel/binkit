@@ -14,6 +14,12 @@ import (
 // This is deliberately not a general semver implementation. binkit only ever needs to
 // answer "is upstream newer than the pin", which does not justify depending on
 // golang.org/x/mod for one comparison.
+//
+// One consequence is worth knowing: two prereleases of the same version compare
+// lexically rather than numerically, so "1.0.0-rc10" sorts below "1.0.0-rc9". The cost
+// is confined to whether an advisory notice is shown between two prereleases. It cannot
+// affect what gets installed, because nothing here feeds [Resolver.Ensure] — the pin
+// alone decides that.
 func compareVersions(a, b string) int {
 	numsA, preA := parseVersion(a)
 	numsB, preB := parseVersion(b)

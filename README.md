@@ -7,7 +7,7 @@ them from GitHub releases, verifies them against a pinned SHA-256, caches them p
 and hands your program back a path.
 
 ```go
-path, err := resolver.Ensure(ctx, catalog.Typst)
+path, err := resolver.Ensure(ctx, catalog.Typst())
 if err != nil {
     return err
 }
@@ -49,9 +49,10 @@ instead of a file-locking library.
 Digests are captured for every platform at pin time, so a colleague on macOS gets a verified
 install from a lockfile generated on Linux.
 
-`Ensure` never resolves "latest" and never silently reaches the network — a pinned version
-downloads by direct URL, which also means no GitHub API rate limit and no token. Only an
-explicit `Update` call changes the pin.
+`Ensure` never resolves "latest": a pinned version downloads by direct URL, so provisioning
+makes no GitHub API call, needs no token, and cannot hit the API rate limit. The one API
+request `Ensure` can make is the advisory update check below, which changes nothing and is
+disableable. Only an explicit `Update` call changes the pin.
 
 ## Update checks
 
@@ -77,6 +78,16 @@ Nothing here can fail a build, and nothing is ever updated automatically. Set
 
 `BINKIT_<TOOLNAME>` (e.g. `BINKIT_TYPST=/usr/bin/typst`) short-circuits everything and uses
 that binary. Useful for CI images, Nix, and distro packages.
+
+The tool name is upper-cased and every character outside `A-Z0-9` becomes an underscore, so
+`go-task` reads `BINKIT_GO_TASK`. Don't name a tool `cache` or `no-update-check` — those
+collide with `BINKIT_CACHE` and `BINKIT_NO_UPDATE_CHECK`.
+
+## Stability
+
+v0: the Go API may change in a minor release. The lock file format is held to a stricter
+standard, since it lives in your repository and a break there breaks builds. Changes are
+recorded in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
