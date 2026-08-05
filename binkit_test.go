@@ -797,6 +797,84 @@ func TestPinsReportsWhatEnsureWouldResolve(t *testing.T) {
 	}
 }
 
+// TestCachedPathFindsAnInstalledTool checks the happy path and, more importantly, that
+// finding it cost nothing: CachedPath exists so a caller can ask "is this provisioned?"
+// on a machine that is deliberately offline.
+func TestCachedPathFindsAnInstalledTool(t *testing.T) {
+	assets := widgetAssets(t, testVersion, DefaultPlatforms)
+	gh := newFakeGitHub(t, "v"+testVersion, assets, true)
+	r := gh.resolver(t)
+	tool := widgetTool()
+	pin(t, r, tool, testVersion, assets)
+
+	installed, err := r.Ensure(t.Context(), tool)
+	if err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+
+	before := gh.apiHits.Load() + gh.dlHits.Load()
+	got, err := r.CachedPath(tool)
+	if err != nil {
+		t.Fatalf("CachedPath: %v", err)
+	}
+	if got != installed {
+		t.Errorf("CachedPath = %q, want %q", got, installed)
+	}
+	if after := gh.apiHits.Load() + gh.dlHits.Load(); after != before {
+		t.Errorf("CachedPath made %d requests, want 0", after-before)
+	}
+}
+
+// TestCachedPathPinnedButNotInstalled is the distinction the error exists for: the tool
+// is pinned, so this is not ErrNotPinned, but nothing was fetched to satisfy it.
+func TestCachedPathPinnedButNotInstalled(t *testing.T) {
+	assets := widgetAssets(t, testVersion, DefaultPlatforms)
+	gh := newFakeGitHub(t, "v"+testVersion, assets, true)
+	r := gh.resolver(t)
+	tool := widgetTool()
+	pin(t, r, tool, testVersion, assets)
+
+	if _, err := r.CachedPath(tool); !errors.Is(err, ErrNotCached) {
+		t.Fatalf("CachedPath error = %v, want ErrNotCached", err)
+	}
+	if hits := gh.apiHits.Load() + gh.dlHits.Load(); hits != 0 {
+		t.Errorf("CachedPath made %d requests; it must never install", hits)
+	}
+}
+
+func TestCachedPathUnpinnedIsNotPinned(t *testing.T) {
+	gh := newFakeGitHub(t, "v"+testVersion, nil, true)
+	r := gh.resolver(t)
+
+	if _, err := r.CachedPath(widgetTool()); !errors.Is(err, ErrNotPinned) {
+		t.Errorf("CachedPath error = %v, want ErrNotPinned", err)
+	}
+}
+
+// TestCachedPathAgreesWithEnsureOnTheOverride guards the property the doc promises: a
+// caller consulting CachedPath before Ensure must not reach a different conclusion about
+// which binary is in play.
+func TestCachedPathAgreesWithEnsureOnTheOverride(t *testing.T) {
+	gh := newFakeGitHub(t, "v"+testVersion, nil, true)
+	r := gh.resolver(t)
+	tool := widgetTool()
+
+	const override = "/usr/local/bin/widget"
+	t.Setenv(tool.EnvKey(), override)
+
+	cached, err := r.CachedPath(tool)
+	if err != nil {
+		t.Fatalf("CachedPath: %v", err)
+	}
+	ensured, err := r.Ensure(t.Context(), tool)
+	if err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+	if cached != override || ensured != override {
+		t.Errorf("CachedPath = %q, Ensure = %q, want both %q", cached, ensured, override)
+	}
+}
+
 // TestPinsDefaultsToToolsJSON pins the documented zero-value behaviour: the same
 // "tools.json in the working directory" default that Ensure uses.
 func TestPinsDefaultsToToolsJSON(t *testing.T) {

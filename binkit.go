@@ -68,6 +68,7 @@ const (
 var (
 	ErrInvalidTool         = errors.New("binkit: invalid tool definition")
 	ErrNotPinned           = errors.New("binkit: tool is not pinned")
+	ErrNotCached           = errors.New("binkit: tool is pinned but not installed")
 	ErrNoDigest            = errors.New("binkit: no pinned digest for this platform")
 	ErrDigestMismatch      = errors.New("binkit: digest mismatch")
 	ErrUnsupportedPlatform = errors.New("binkit: tool is not published for this platform")
@@ -377,6 +378,53 @@ func (r *Resolver) Update(ctx context.Context, t Tool, version string) (string, 
 	return r.install(ctx, t, entry)
 }
 
+// versionDirFor returns the cache directory holding one version of a tool. It is the
+// single definition of the cache layout, shared by install and [Resolver.CachedPath] so
+// the two cannot drift into disagreeing about where a binary lives.
+func versionDirFor(cache string, t Tool, version string) string {
+	return filepath.Join(cache, t.Name, version)
+}
+
+// CachedPath returns the path to the pinned version of t if it is already installed.
+//
+// Unlike [Resolver.Ensure] it never downloads, never verifies, and never touches the
+// network — it answers "is this already provisioned?" and nothing else. A pinned tool
+// that is not in the cache yields [ErrNotCached] rather than being fetched, which is what
+// makes this usable on a machine that is deliberately offline.
+//
+// The per-tool environment override is honoured first, exactly as Ensure honours it, so
+// a caller that consults CachedPath before Ensure cannot reach a different conclusion
+// about which binary is in play.
+func (r *Resolver) CachedPath(t Tool) (string, error) {
+	if err := t.validate(); err != nil {
+		return "", err
+	}
+
+	if path := os.Getenv(t.EnvKey()); path != "" {
+		return path, nil
+	}
+
+	lockPath := r.lockPath()
+	lock, err := readLock(lockPath)
+	if err != nil {
+		return "", err
+	}
+	entry, ok := lock[t.Name]
+	if !ok {
+		return "", fmt.Errorf("%w: %s (looked in %s)", ErrNotPinned, t.Name, lockPath)
+	}
+
+	cache, err := r.cacheDir()
+	if err != nil {
+		return "", err
+	}
+	binPath := filepath.Join(versionDirFor(cache, t, entry.Version), t.binName())
+	if _, err := os.Stat(binPath); err != nil {
+		return "", fmt.Errorf("%w: %s %s", ErrNotCached, t.Name, entry.Version)
+	}
+	return binPath, nil
+}
+
 // install returns the cached binary, downloading and verifying it on a cache miss.
 //
 // Concurrent calls for the same tool and version within one process share a single
@@ -390,7 +438,7 @@ func (r *Resolver) install(ctx context.Context, t Tool, entry LockEntry) (string
 	if err != nil {
 		return "", err
 	}
-	versionDir := filepath.Join(cache, t.Name, entry.Version)
+	versionDir := versionDirFor(cache, t, entry.Version)
 	binPath := filepath.Join(versionDir, t.binName())
 
 	if _, err := os.Stat(binPath); err == nil {
