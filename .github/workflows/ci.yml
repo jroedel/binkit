@@ -1,0 +1,104 @@
+# Actions are pinned to commit SHAs rather than floating tags. A library whose whole
+# premise is "pin the thing you execute and verify it" should not fetch its own build
+# steps from a mutable ref.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Monday 05:00 UTC. Catches an upstream project changing its release layout even
+    # when nothing here has changed.
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # The matrix is the point of this job. binkit's Windows path (zip extraction, .exe
+  # naming) and its darwin asset naming were previously exercised only by table tests
+  # running on Linux, so nothing executed the code those platforms actually take.
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+
+  lint:
+    name: lint and vulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      # go.mod carries exactly one require line, and that is a stated promise in the
+      # README rather than an accident. Fail if a change quietly adds another.
+      - name: one-dependency promise
+        run: |
+          go mod tidy -diff
+          deps=$(go list -deps -f '{{if not .Standard}}{{.Module}}{{end}}' ./... \
+            | grep -v '^github.com/jroedel/binkit' | sort -u)
+          echo "external modules: ${deps:-none}"
+          if [ "$(echo "$deps" | grep -c .)" -gt 1 ]; then
+            echo "more than one external module; update the README's promise or drop the dep"
+            exit 1
+          fi
+
+      - name: staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          staticcheck ./...
+          staticcheck -tags=integration ./...
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  # Integration tests download real releases, so they are kept off the PR path: they
+  # would burn the unauthenticated API quota and would fail on an upstream outage that
+  # has nothing to do with the change under review. Weekly is enough to catch a project
+  # changing its release layout before a user does.
+  integration:
+    name: integration (${{ matrix.os }})
+    if: github.event_name != 'pull_request'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - run: go test -race -count=1 -tags=integration -timeout=15m ./...
+        env:
+          # Lifts the 60 requests/hour unauthenticated limit. binkit never requires a
+          # token; this is only so parallel matrix jobs do not exhaust the quota.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
