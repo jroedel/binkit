@@ -33,26 +33,20 @@ binkit is itself a Go program, so `go tool` can manage it — which is the thing
 exists to work around for tools that *aren't* Go.
 
 ```sh
-go get -tool github.com/jroedel/binkit/cmd/binkit@main
+go get -tool github.com/jroedel/binkit/cmd/binkit@latest
 ```
 
-Then invoke it as `go tool binkit`. Alternatively install it standalone:
+Then invoke it as `go tool binkit`. This records the version in your `go.mod`, so everyone
+working on the project pins their tooling the same way binkit pins Typst.
+
+Alternatively install it standalone:
 
 ```sh
-go install github.com/jroedel/binkit/cmd/binkit@main
+go install github.com/jroedel/binkit/cmd/binkit@latest
 ```
 
-> **Version note.** `@latest` does not work yet: the CLI is not in the `v0.1.0` tag, which
-> was library-only. Use `@main` once the branch adding `cmd/binkit` has been merged —
-> before that, `go get` resolves the module but reports that it does not contain the
-> package. Switch to `@v0.2.0` or later once a tag containing the CLI exists.
->
-> If you need to integrate before either is true, build from a checkout:
->
-> ```sh
-> git clone https://github.com/jroedel/binkit && cd binkit
-> go build -o /usr/local/bin/binkit ./cmd/binkit
-> ```
+> **Version note.** The CLI arrived in `v0.2.0`. `v0.1.0` was library-only, so pin to
+> `v0.2.0` or later if you pin explicitly.
 
 ## Step 2 — pin the tool
 
