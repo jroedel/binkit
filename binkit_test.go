@@ -30,6 +30,25 @@ import (
 
 const testVersion = "1.4.2"
 
+// requireExecutable asserts the Unix executable bit.
+//
+// Windows has no such bit: Go reports 0666 for any writable file there, and what makes
+// a binary runnable is the .exe suffix binName appends, which the callers already check
+// by opening the path they were handed. Asserting mode there tests the OS, not binkit.
+func requireExecutable(t *testing.T, path string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %s: %v", path, err)
+	}
+	if info.Mode().Perm()&0o111 == 0 {
+		t.Errorf("%s is not executable: mode %v", path, info.Mode().Perm())
+	}
+}
+
 // widgetTool is a synthetic tool shaped like a real one: per-platform asset names, a
 // target-named directory inside the archive, zip on Windows and tar.xz elsewhere, and
 // one platform it is simply not published for.
@@ -354,13 +373,7 @@ func TestEnsureInstallsVerifiesAndCaches(t *testing.T) {
 		t.Errorf("installed content = %q, want %q", content, want)
 	}
 
-	info, err := os.Stat(binPath)
-	if err != nil {
-		t.Fatalf("stat installed binary: %v", err)
-	}
-	if info.Mode().Perm()&0o111 == 0 {
-		t.Errorf("installed binary is not executable: mode %v", info.Mode().Perm())
-	}
+	requireExecutable(t, binPath)
 
 	// The staged archive must not survive into the cache.
 	entries, err := os.ReadDir(filepath.Dir(binPath))
@@ -714,6 +727,12 @@ func TestLockRoundTrip(t *testing.T) {
 // the staging rename. The lock file is committed and read by anyone who can read the
 // repository, so a private mode is wrong even though git would not record it.
 func TestLockFileIsReadable(t *testing.T) {
+	// Windows has no Unix permission bits: Go reports 0666 for any writable file, and
+	// the 0600 mode this guards against cannot arise there in the first place.
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix permission bits on Windows")
+	}
+
 	path := filepath.Join(t.TempDir(), "tools.json")
 	if err := writeLock(path, LockFile{"widget": {Version: "1.0.0", Repo: "acme/widget"}}); err != nil {
 		t.Fatalf("write lock: %v", err)

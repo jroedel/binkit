@@ -47,13 +47,7 @@ func TestExtractBinarySupportedFormats(t *testing.T) {
 				t.Errorf("extracted %q, want %q", got, payload)
 			}
 
-			info, err := os.Stat(out)
-			if err != nil {
-				t.Fatalf("stat extracted binary: %v", err)
-			}
-			if info.Mode().Perm()&0o111 == 0 {
-				t.Errorf("extracted binary is not executable: mode %v", info.Mode().Perm())
-			}
+			requireExecutable(t, out)
 		})
 	}
 }
