@@ -9,6 +9,8 @@ there breaks builds. Any change to it will appear here under its own heading.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-06
+
 ### Added
 
 - `cmd/binkit`, a CLI with `pin`, `ensure`, `path`, and `list`. Until now a project could
@@ -73,5 +75,6 @@ there breaks builds. Any change to it will appear here under its own heading.
 
 - The lock file is written 0644 rather than inheriting `os.CreateTemp`'s 0600.
 
-[Unreleased]: https://github.com/jroedel/binkit/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jroedel/binkit/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jroedel/binkit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jroedel/binkit/releases/tag/v0.1.0
