@@ -93,7 +93,8 @@ var DefaultPlatforms = []Platform{
 // be expressed as a format string in general.
 type Tool struct {
 	// Name keys the cache and the lock file, and forms the per-tool environment
-	// override. Required.
+	// override. Two names are unavailable because they would collide with binkit's
+	// own variables; see [Tool.EnvKey]. Required.
 	Name string
 
 	// Repo is the GitHub "owner/name" hosting the releases. Required.
@@ -113,6 +114,13 @@ type Tool struct {
 
 // EnvKey is the environment variable that overrides this tool entirely, e.g.
 // BINKIT_TYPST. When set, Ensure returns its value untouched.
+//
+// The name is upper-cased and every character outside A-Z and 0-9 becomes an
+// underscore, so "go-task" yields BINKIT_GO_TASK. That mapping shares a namespace with
+// binkit's own environment variables: a tool named "cache" would produce [EnvCacheDir]
+// and one named "no-update-check" would produce [EnvNoUpdateCheck]. Those two names
+// collide and must not be used — setting the variable to steer binkit would silently
+// be read as a path override for the tool, and vice versa.
 func (t Tool) EnvKey() string {
 	var b strings.Builder
 	b.WriteString(envToolPrefix)

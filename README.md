@@ -79,6 +79,10 @@ Nothing here can fail a build, and nothing is ever updated automatically. Set
 `BINKIT_<TOOLNAME>` (e.g. `BINKIT_TYPST=/usr/bin/typst`) short-circuits everything and uses
 that binary. Useful for CI images, Nix, and distro packages.
 
+The tool name is upper-cased and every character outside `A-Z0-9` becomes an underscore, so
+`go-task` reads `BINKIT_GO_TASK`. Don't name a tool `cache` or `no-update-check` — those
+collide with `BINKIT_CACHE` and `BINKIT_NO_UPDATE_CHECK`.
+
 ## License
 
 MIT
