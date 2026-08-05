@@ -22,6 +22,13 @@
 // what is installed, and never returns an error. [Resolver.NoCheck] and [EnvNoUpdateCheck]
 // disable it.
 //
+// # Stability
+//
+// The module is v0: the Go API may still change in a minor release. The lock file format
+// is treated more conservatively, because it lives in a consuming project's repository —
+// a break there breaks builds rather than merely compilations. Any change to it is called
+// out in CHANGELOG.md.
+//
 // # Design
 //
 // binkit knows nothing about any particular tool. A [Tool] is plain data supplied by the

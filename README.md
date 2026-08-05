@@ -83,6 +83,12 @@ The tool name is upper-cased and every character outside `A-Z0-9` becomes an und
 `go-task` reads `BINKIT_GO_TASK`. Don't name a tool `cache` or `no-update-check` — those
 collide with `BINKIT_CACHE` and `BINKIT_NO_UPDATE_CHECK`.
 
+## Stability
+
+v0: the Go API may change in a minor release. The lock file format is held to a stricter
+standard, since it lives in your repository and a break there breaks builds. Changes are
+recorded in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 MIT
